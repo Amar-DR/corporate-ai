@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } fro
 const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 
 const Card = ({ title, value, sub, color = 'emerald' }) => (
-  <div className={`bg-gray-900 border border-gray-800 rounded-xl p-5`}>
+  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
     <div className="text-gray-400 text-xs uppercase tracking-widest mb-1">{title}</div>
     <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
     {sub && <div className="text-gray-500 text-xs mt-1">{sub}</div>}
@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [health, setHealth] = useState(null)
   const [today, setToday] = useState(null)
+  const [networth, setNetworth] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -27,6 +28,10 @@ export default function Dashboard() {
       getSummary(month).then(r => setSummary(r.data)),
       getHealthScore(month).then(r => setHealth(r.data)),
       getToday().then(r => setToday(r.data)),
+      fetch('http://100.110.240.44:8001/api/v1/networth')
+        .then(r => r.json())
+        .then(d => setNetworth(d))
+        .catch(() => setNetworth(null)),
     ]).finally(() => setLoading(false))
   }, [month])
 
@@ -61,6 +66,36 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Networth Card */}
+      {networth && (
+        <div className="bg-gray-900 border border-emerald-500/40 rounded-xl p-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="text-xs text-gray-500 uppercase tracking-widest mb-2">Total Networth</div>
+              <div className="text-4xl font-black text-emerald-400">{fmt(networth.total_networth_idr)}</div>
+              <div className="flex gap-6 mt-3">
+                <div>
+                  <div className="text-xs text-gray-600 mb-0.5">Crypto</div>
+                  <div className="text-blue-400 font-semibold text-sm">{fmt(networth.breakdown.crypto)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-600 mb-0.5">Cash</div>
+                  <div className="text-gray-400 font-semibold text-sm">{fmt(networth.breakdown.cash)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              {networth.holdings?.map(h => (
+                <div key={h.asset} className="mb-1">
+                  <span className="text-gray-500 text-xs">{h.asset}: </span>
+                  <span className="text-white text-xs font-medium">{h.qty.toFixed(5)} → {fmt(h.value_idr)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Today strip */}
       {today && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex gap-6 flex-wrap">
@@ -78,7 +113,7 @@ export default function Dashboard() {
               {fmt(today.net)}
             </div>
           </div>
-          <div className="ml-auto text-xs text-gray-600 self-end">{today.transaction_count || today.transactions?.length} transaksi</div>
+          <div className="ml-auto text-xs text-gray-600 self-end">{today.transactions?.length} transaksi</div>
         </div>
       )}
 
@@ -95,23 +130,29 @@ export default function Dashboard() {
       {/* Health Score */}
       {health && !health.error && (
         <div className={`bg-gray-900 border border-${levelColor}-500/30 rounded-xl p-5`}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-start justify-between mb-3">
             <div>
               <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Health Score</div>
-              <div className={`text-3xl font-black text-${levelColor}-400`}>{health.score}<span className="text-base text-gray-500">/100</span></div>
-              <div className={`text-sm font-bold text-${levelColor}-400 mt-1`}>Level {health.level} — {health.label}</div>
+              <div className={`text-3xl font-black text-${levelColor}-400`}>
+                {health.score}<span className="text-base text-gray-500">/100</span>
+              </div>
+              <div className={`text-sm font-bold text-${levelColor}-400 mt-1`}>
+                Level {health.level} — {health.label}
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-gray-400 text-sm max-w-xs">{health.advice}</div>
+            <div className="text-right max-w-xs">
+              <div className="text-gray-400 text-sm leading-relaxed">{health.advice}</div>
             </div>
           </div>
           <div className="grid grid-cols-4 gap-3 mt-4">
-            {Object.entries(health.breakdown).filter(([k]) => k.startsWith('score')).map(([k, v]) => (
-              <div key={k} className="bg-gray-800 rounded-lg p-3 text-center">
-                <div className={`text-${levelColor}-400 font-bold text-lg`}>{v}</div>
-                <div className="text-gray-500 text-xs mt-1">{k.replace('score_', '').replace('_', ' ')}</div>
-              </div>
-            ))}
+            {Object.entries(health.breakdown)
+              .filter(([k]) => k.startsWith('score'))
+              .map(([k, v]) => (
+                <div key={k} className="bg-gray-800 rounded-lg p-3 text-center">
+                  <div className={`text-${levelColor}-400 font-bold text-lg`}>{v}</div>
+                  <div className="text-gray-500 text-xs mt-1">{k.replace('score_', '').replace('_', ' ')}</div>
+                </div>
+              ))}
           </div>
         </div>
       )}

@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Query, HTTPException
 from datetime import date
 from calendar import monthrange
@@ -202,4 +203,61 @@ async def get_health_score(
             "expense": expense,
             "invest": invest,
         }
+    }
+
+@router.get("/networth")
+async def get_networth():
+    """Total networth = crypto market value + cash"""
+    pool = get_pool()
+
+    # Ambil semua holdings crypto dari DB
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT asset, SUM(CASE WHEN type='invest_in' THEN asset_qty ELSE -asset_qty END) as qty
+            FROM transactions
+            WHERE asset IS NOT NULL AND asset_qty IS NOT NULL
+            GROUP BY asset
+        """)
+
+    # Ambil harga realtime
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "tether,bitcoin", "vs_currencies": "idr"}
+            )
+            prices_data = resp.json()
+            prices = {
+                "USDT": prices_data["tether"]["idr"],
+                "BTC": prices_data["bitcoin"]["idr"],
+            }
+    except Exception:
+        prices = {"USDT": 17500, "BTC": 1370000000}
+
+    # Hitung total crypto
+    crypto_value = 0
+    holdings = []
+    for r in rows:
+        qty = float(r["qty"] or 0)
+        if qty <= 0:
+            continue
+        price = prices.get(r["asset"], 0)
+        value = qty * price
+        crypto_value += value
+        holdings.append({
+            "asset": r["asset"],
+            "qty": qty,
+            "value_idr": round(value, 0),
+        })
+
+    total = crypto_value  # tambah cash/saham nanti
+
+    return {
+        "total_networth_idr": round(total, 0),
+        "breakdown": {
+            "crypto": round(crypto_value, 0),
+            "cash": 0,
+            "stocks": 0,
+        },
+        "holdings": holdings,
     }
