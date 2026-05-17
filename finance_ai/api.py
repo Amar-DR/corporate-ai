@@ -7,6 +7,7 @@ from routers.transactions import router as txn_router
 from routers.import_excel import router as import_router
 from routers.summary import router as summary_router
 from routers.portfolio import router as portfolio_router
+from routers.advisor import router as advisor_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -17,7 +18,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Finance AI",
     description="Asisten keuangan personal berbasis AI",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -33,7 +34,8 @@ app.include_router(txn_router)
 app.include_router(import_router)
 app.include_router(summary_router)
 app.include_router(portfolio_router)
+app.include_router(advisor_router)
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok", "service": "finance_ai"}
+    return {"status": "ok", "service": "finance_ai", "version": "2.0.0"}
