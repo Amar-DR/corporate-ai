@@ -261,3 +261,70 @@ async def get_networth():
         },
         "holdings": holdings,
     }
+
+
+@router.get("/networth/history")
+async def get_networth_history():
+    """Hitung networth per bulan dari Januari sampai sekarang"""
+    pool = get_pool()
+
+    async with pool.acquire() as conn:
+        # Ambil semua bulan yang ada datanya
+        months = await conn.fetch("""
+            SELECT DISTINCT TO_CHAR(date, 'YYYY-MM') as month
+            FROM transactions
+            ORDER BY month ASC
+        """)
+
+        # Ambil total investasi kumulatif per bulan
+        rows = await conn.fetch("""
+            SELECT
+                TO_CHAR(date, 'YYYY-MM') as month,
+                SUM(CASE WHEN type = 'invest_in' THEN amount ELSE 0 END) as invested,
+                SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+                SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+            FROM transactions
+            GROUP BY TO_CHAR(date, 'YYYY-MM')
+            ORDER BY month ASC
+        """)
+
+    # Hitung networth kumulatif per bulan
+    # Pakai harga USDT saat ini sebagai approximasi (nanti bisa historical)
+    result = []
+    cumulative_invest = 0
+    cumulative_net = 0
+
+    for r in rows:
+        cumulative_invest += float(r["invested"] or 0)
+        cumulative_net += float(r["income"] or 0) - float(r["expense"] or 0)
+
+        result.append({
+            "month": r["month"],
+            "invested": round(cumulative_invest, 0),
+            "net_cash": round(cumulative_net, 0),
+            "total": round(cumulative_invest + max(cumulative_net, 0), 0),
+        })
+
+    return {"history": result}
+
+
+@router.get("/networth/snapshots")
+async def get_networth_snapshots():
+    """Ambil data weekly networth snapshot dari tabel manual"""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT date, total_idr, notes
+            FROM networth_snapshots
+            ORDER BY date ASC
+        """)
+    return {
+        "snapshots": [
+            {
+                "date": str(r["date"]),
+                "total": float(r["total_idr"]),
+                "notes": r["notes"],
+            }
+            for r in rows
+        ]
+    }
